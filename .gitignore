@@ -1,11 +1,27 @@
-node_modules
-.env
-coverage
-coverage.json
-typechain
-typechain-types
-.DS_Store
+# Hardhat
+cache/
+artifacts/
 
-# Hardhat files
-cache
-artifacts
+# Node
+node_modules/
+coverage/
+coverage.json
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Build
+dist/
+build/
+
+# Misc
+.DS_Store

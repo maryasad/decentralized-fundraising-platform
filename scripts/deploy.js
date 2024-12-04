@@ -6,9 +6,10 @@ async function main() {
   const CrowdFunding = await hre.ethers.getContractFactory("CrowdFunding");
   const crowdFunding = await CrowdFunding.deploy();
 
-  await crowdFunding.deployed();
+  await crowdFunding.waitForDeployment();
+  const address = await crowdFunding.getAddress();
 
-  console.log(`CrowdFunding deployed to: ${crowdFunding.address}`);
+  console.log(`CrowdFunding deployed to: ${address}`);
 }
 
 main().catch((error) => {

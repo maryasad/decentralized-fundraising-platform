@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFund - Decentralized Crowdfunding</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js" type="application/javascript"></script>
+</head>
+<body class="bg-gray-100">
+    <div id="app">
+        <nav class="bg-indigo-600 p-4">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-white text-2xl font-bold">DeFund</h1>
+                <button id="connectWallet" class="bg-white text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-50">
+                    Connect Wallet
+                </button>
+            </div>
+        </nav>
+
+        <main class="container mx-auto py-8 px-4">
+            <!-- Create Campaign Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h2 class="text-2xl font-bold mb-4">Create Campaign</h2>
+                <form id="createCampaignForm" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Campaign Title</label>
+                        <input type="text" id="title" class="w-full p-2 border rounded" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Description</label>
+                        <textarea id="description" class="w-full p-2 border rounded" rows="3" required></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Goal (ETH)</label>
+                        <input type="number" id="goal" class="w-full p-2 border rounded" step="0.01" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Duration (Days)</label>
+                        <input type="number" id="duration" class="w-full p-2 border rounded" required>
+                    </div>
+                    <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700">
+                        Create Campaign
+                    </button>
+                </form>
+            </div>
+
+            <!-- Campaigns List -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-4">Active Campaigns</h2>
+                <div id="campaignsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Campaigns will be dynamically added here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+        const contractABI = [
+            "function createCampaign(string memory _title, string memory _description, uint256 _goal, uint256 _durationInDays) external",
+            "function contribute(uint256 _campaignId) external payable",
+            "function getCampaign(uint256 _campaignId) external view returns (address creator, string memory title, string memory description, uint256 goal, uint256 deadline, uint256 amountRaised, bool claimed)",
+            "function campaignCount() public view returns (uint256)",
+            "event CampaignCreated(uint256 campaignId, address creator, string title, uint256 goal)"
+        ];
+
+        let provider;
+        let signer;
+        let contract;
+
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    alert('Please install MetaMask!');
+                    return;
+                }
+
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+                const address = await signer.getAddress();
+                document.getElementById('connectWallet').textContent = 
+                    address.slice(0, 6) + '...' + address.slice(-4);
+
+                loadCampaigns();
+            } catch (error) {
+                console.error('Error connecting wallet:', error);
+                alert('Failed to connect wallet');
+            }
+        }
+
+        async function createCampaign(event) {
+            event.preventDefault();
+            
+            if (!contract) {
+                alert('Please connect your wallet first');
+                return;
+            }
+
+            try {
+                const title = document.getElementById('title').value;
+                const description = document.getElementById('description').value;
+                const goal = ethers.utils.parseEther(document.getElementById('goal').value);
+                const duration = document.getElementById('duration').value;
+
+                const tx = await contract.createCampaign(title, description, goal, duration);
+                await tx.wait();
+
+                alert('Campaign created successfully!');
+                loadCampaigns();
+                event.target.reset();
+            } catch (error) {
+                console.error('Error creating campaign:', error);
+                alert('Failed to create campaign');
+            }
+        }
+
+        async function contribute(campaignId, amount) {
+            if (!contract) {
+                alert('Please connect your wallet first');
+                return;
+            }
+
+            try {
+                const tx = await contract.contribute(campaignId, {
+                    value: ethers.utils.parseEther(amount)
+                });
+                await tx.wait();
+                alert('Contribution successful!');
+                loadCampaigns();
+            } catch (error) {
+                console.error('Error contributing:', error);
+                alert('Failed to contribute');
+            }
+        }
+
+        async function loadCampaigns() {
+            if (!contract) return;
+
+            try {
+                const campaignCount = await contract.campaignCount();
+                const campaignsList = document.getElementById('campaignsList');
+                campaignsList.innerHTML = '';
+
+                for (let i = 0; i < campaignCount; i++) {
+                    const campaign = await contract.getCampaign(i);
+                    const deadline = new Date(campaign[4] * 1000);
+                    const isActive = deadline > new Date();
+
+                    if (isActive) {
+                        const campaignElement = document.createElement('div');
+                        campaignElement.className = 'bg-gray-50 rounded-lg p-6 shadow-sm';
+                        campaignElement.innerHTML = `
+                            <h3 class="text-xl font-bold mb-2">${campaign[1]}</h3>
+                            <p class="text-gray-600 mb-4">${campaign[2]}</p>
+                            <div class="space-y-2">
+                                <p><span class="font-medium">Goal:</span> ${ethers.utils.formatEther(campaign[3])} ETH</p>
+                                <p><span class="font-medium">Raised:</span> ${ethers.utils.formatEther(campaign[5])} ETH</p>
+                                <p><span class="font-medium">Deadline:</span> ${deadline.toLocaleDateString()}</p>
+                            </div>
+                            <div class="mt-4">
+                                <input type="number" placeholder="Amount in ETH" class="p-2 border rounded mr-2" step="0.01" id="amount-${i}">
+                                <button onclick="contribute(${i}, document.getElementById('amount-${i}').value)"
+                                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+                                    Contribute
+                                </button>
+                            </div>
+                        `;
+                        campaignsList.appendChild(campaignElement);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading campaigns:', error);
+            }
+        }
+
+        document.getElementById('connectWallet').addEventListener('click', connectWallet);
+        document.getElementById('createCampaignForm').addEventListener('submit', createCampaign);
+    </script>
+</body>
+</html>
